@@ -1,6 +1,8 @@
 
+preview
+https://github.com/user-attachments/assets/9663ef22-51eb-43ae-b1a8-5effa9c47565
 
-https://github.com/user-attachments/assets/11a0f4ee-1ef7-4f49-aea9-518daeb36ec4
+
 
 
 # Windows Taskbar Multi-Widget
