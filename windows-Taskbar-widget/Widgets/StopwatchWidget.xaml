@@ -1,0 +1,77 @@
+<UserControl x:Class="TaskbarMusicWidget.Widgets.StopwatchWidget"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Height="38">
+
+    <UserControl.Resources>
+        <Style x:Key="CtrlBtn" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="5" Padding="2">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#40FFFFFF"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#60FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="36"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="82"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Icon area -->
+        <Border Grid.Column="0" Margin="4" CornerRadius="4">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#001A0F" Offset="0"/>
+                    <GradientStop Color="#001209" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <TextBlock Text="⏱" FontSize="15"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Foreground="#10B981"/>
+        </Border>
+
+        <!-- Time display -->
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="2,0">
+            <TextBlock Name="TxtLabel" Text="STOPWATCH" FontSize="7" FontWeight="Bold"
+                       Foreground="#10B981" Opacity="0.8" Margin="0,0,0,1"/>
+            <TextBlock Name="TxtTime" Text="00:00.0"
+                       FontSize="14" FontWeight="Bold"
+                       Foreground="White"
+                       FontFamily="Consolas, Courier New"/>
+        </StackPanel>
+
+        <!-- Buttons: Play/Pause + Lap + Reset -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="2,0">
+            <Button Name="BtnStartPause" Content="▶" Style="{StaticResource CtrlBtn}"
+                    Click="BtnStartPause_Click" ToolTip="Start / Pause"/>
+            <Button Name="BtnLap" Content="🏁" Style="{StaticResource CtrlBtn}"
+                    Click="BtnLap_Click" ToolTip="Lap" IsEnabled="False"/>
+            <Button Name="BtnReset" Content="⏹" Style="{StaticResource CtrlBtn}"
+                    Click="BtnReset_Click" ToolTip="Reset"/>
+        </StackPanel>
+    </Grid>
+</UserControl>
