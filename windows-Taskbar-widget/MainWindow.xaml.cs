@@ -280,8 +280,11 @@ namespace TaskbarMusicWidget
                 int tbH = tb.Bottom - tb.Top;
                 int wH  = (int)(Height * dpi);
                 int wW  = (int)(Width  * dpi);
-                int tX  = tb.Left + 8;
                 int tY  = tb.Top  + (tbH - wH) / 2;
+                
+                int tbW = tb.Right - tb.Left;
+                double pct = WidgetManager.Instance.Config.PositionPercent / 100.0;
+                int tX = tb.Left + (int)(tbW * pct);
 
                 if (tX != _lastX || tY != _lastY || wW != _lastW || wH != _lastH)
                 {
@@ -306,6 +309,12 @@ namespace TaskbarMusicWidget
                     _lastX  = 0; // mark as initialized
                 }
             }
+        }
+
+        public void ForceReposition()
+        {
+            _lastX = int.MinValue;
+            PositionOnTaskbar();
         }
 
         private bool IsForegroundFullScreen()

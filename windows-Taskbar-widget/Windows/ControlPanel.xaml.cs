@@ -60,6 +60,7 @@ namespace TaskbarMusicWidget.Windows
             // Startup
             ChkStartup.IsChecked = mgr.Config.StartWithWindows;
             ChkHideFullScreen.IsChecked = mgr.Config.HideOnFullScreen;
+            SldPosition.Value = mgr.Config.PositionPercent;
             _loading = false;
         }
 
@@ -125,6 +126,17 @@ namespace TaskbarMusicWidget.Windows
             if (_loading) return;
             WidgetManager.Instance.Config.HideOnFullScreen = ChkHideFullScreen.IsChecked == true;
             WidgetManager.Instance.Config.Save();
+        }
+
+        private void Position_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_loading) return;
+            WidgetManager.Instance.Config.PositionPercent = e.NewValue;
+            WidgetManager.Instance.Config.Save();
+            
+            // Force an immediate refresh of the main window position
+            var mainWindow = Application.Current.MainWindow as MainWindow;
+            mainWindow?.ForceReposition();
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)
