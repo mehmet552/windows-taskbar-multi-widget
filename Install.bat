@@ -14,7 +14,7 @@ $installDir = Join-Path $env:LOCALAPPDATA $appName
 $startupFolder = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup"
 $shortcutPath = Join-Path $startupFolder "$appName.lnk"
 $exePath = Join-Path $installDir "$appName.exe"
-$projectDir = Join-Path (Get-Location) "TaskbarMusicWidget"
+$projectDir = Join-Path (Get-Location) "windows-Taskbar-widget"
 
 Write-Host ">>> Eski surum kapatiliyor..." -ForegroundColor Cyan
 Stop-Process -Name $appName -Force -ErrorAction SilentlyContinue
@@ -29,6 +29,7 @@ $Shortcut = $WshShell.CreateShortcut($shortcutPath)
 $Shortcut.TargetPath = $exePath
 $Shortcut.WorkingDirectory = $installDir
 $Shortcut.Description = "Taskbar Music Widget"
+$Shortcut.IconLocation = "$exePath,0"
 $Shortcut.Save()
 
 Write-Host ">>> Kurulum tamamlandi! Uygulama baslatiliyor..." -ForegroundColor Green
