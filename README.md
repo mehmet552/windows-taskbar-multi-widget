@@ -29,5 +29,7 @@ To remove the widget from your system:
 
 ## Requirements
 
-- [.NET SDK](https://dotnet.microsoft.com/download) (Required to build and publish the project using the install script)
-- Windows OS (Windows 10/11 recommended)
+- **.NET 10.0 SDK** (Required to build and publish the project using the install script)
+- **Windows 10 / Windows 11**
+- **Important:** To ensure this widget displays correctly without overlapping, you must **disable the native Windows Widgets** (Weather, News, etc.) from the Taskbar settings.
+  - *To disable on Windows 11:* Right-click the Taskbar -> Taskbar settings -> Toggle off "Widgets".
