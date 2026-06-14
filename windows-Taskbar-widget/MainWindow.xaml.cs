@@ -261,7 +261,7 @@ namespace TaskbarMusicWidget
         // ── Taskbar positioning — optimized ────────────────────────────────────
         private void PositionOnTaskbar()
         {
-            bool isFullScreen = IsForegroundFullScreen();
+            bool isFullScreen = IsForegroundFullScreen() && WidgetManager.Instance.Config.HideOnFullScreen;
 
             // Only change visibility when fullscreen state actually changes
             if (isFullScreen != _lastFullScreen)

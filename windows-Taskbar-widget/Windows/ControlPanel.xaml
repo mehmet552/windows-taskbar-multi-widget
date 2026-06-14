@@ -101,6 +101,11 @@
                                 <CheckBox Name="ChkStartup" HorizontalAlignment="Right" VerticalAlignment="Center"
                                           Checked="Startup_Changed" Unchecked="Startup_Changed"/>
                             </Grid>
+                            <Grid Margin="0,12,0,0">
+                                <TextBlock Text="Hide on full screen apps" Foreground="White" FontSize="12" VerticalAlignment="Center"/>
+                                <CheckBox Name="ChkHideFullScreen" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          Checked="HideFullScreen_Changed" Unchecked="HideFullScreen_Changed"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
 

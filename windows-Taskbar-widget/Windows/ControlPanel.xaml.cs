@@ -59,6 +59,7 @@ namespace TaskbarMusicWidget.Windows
 
             // Startup
             ChkStartup.IsChecked = mgr.Config.StartWithWindows;
+            ChkHideFullScreen.IsChecked = mgr.Config.HideOnFullScreen;
             _loading = false;
         }
 
@@ -117,6 +118,13 @@ namespace TaskbarMusicWidget.Windows
                     key?.DeleteValue("TaskbarWidgets", false);
             }
             catch { }
+        }
+
+        private void HideFullScreen_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_loading) return;
+            WidgetManager.Instance.Config.HideOnFullScreen = ChkHideFullScreen.IsChecked == true;
+            WidgetManager.Instance.Config.Save();
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)

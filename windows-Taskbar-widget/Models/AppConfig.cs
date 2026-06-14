@@ -25,6 +25,7 @@ namespace TaskbarMusicWidget.Models
     {
         public bool IsFirstRun { get; set; } = true;
         public bool StartWithWindows { get; set; } = false;
+        public bool HideOnFullScreen { get; set; } = true;
         public int ActiveWidgetIndex { get; set; } = 0;
         public List<WidgetConfig> Widgets { get; set; } = new();
         public PomodoroSettings Pomodoro { get; set; } = new();
