@@ -1,4 +1,8 @@
 
+
+https://github.com/user-attachments/assets/11a0f4ee-1ef7-4f49-aea9-518daeb36ec4
+
+
 # Windows Taskbar Multi-Widget
 
 A versatile and lightweight Windows taskbar widget that enhances your productivity and media experience. This application integrates multiple useful tools directly into your Windows taskbar, including a Music Player controller, a Pomodoro timer, a Stopwatch, and a Countdown Timer. 
