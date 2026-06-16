@@ -54,3 +54,4 @@ project.lock.json
 .DS_Store
 *.pyc
 *.lnk
+!Taskbar Widget.lnk
