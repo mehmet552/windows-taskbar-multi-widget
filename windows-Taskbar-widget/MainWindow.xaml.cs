@@ -284,7 +284,8 @@ namespace TaskbarMusicWidget
                 
                 int tbW = tb.Right - tb.Left;
                 double pct = WidgetManager.Instance.Config.PositionPercent / 100.0;
-                int tX = tb.Left + (int)(tbW * pct);
+                // Subtract widget width (wW) so that at 100% it sits exactly at the right edge
+                int tX = tb.Left + (int)((tbW - wW) * pct);
 
                 if (tX != _lastX || tY != _lastY || wW != _lastW || wH != _lastH)
                 {
