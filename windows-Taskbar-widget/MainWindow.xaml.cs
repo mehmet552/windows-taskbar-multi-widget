@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -25,6 +26,7 @@ namespace TaskbarMusicWidget
         [DllImport("user32.dll")] static extern IntPtr GetShellWindow();
         [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
         [DllImport("user32.dll", CharSet = CharSet.Auto)] static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+        [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, uint extra);
 
         [StructLayout(LayoutKind.Sequential)]
         struct RECT { public int Left, Top, Right, Bottom; }
@@ -55,6 +57,13 @@ namespace TaskbarMusicWidget
         private DispatcherTimer _topmostTimer = null!;
         private DispatcherTimer _visualizerTimer = null!;
         private readonly Random _rand = new();
+        private double _wavePhase = 0;
+
+        // ── Visualizer cached objects ──────────────────────────────────────────
+        private readonly PointCollection _wavePoints = new();
+        private readonly TranslateTransform _catTranslate = new();
+        private readonly ScaleTransform _catScale = new();
+        private readonly TransformGroup _catTransformGroup = new();
 
         // ── Position caching — avoids redundant SetWindowPos/DWM calls ─────────
         private IntPtr _cachedHWnd;
@@ -71,12 +80,41 @@ namespace TaskbarMusicWidget
             Loaded  += OnLoaded;
             Closed  += OnClosed;
 
+            // Pre-fill wave points
+            for (int x = 0; x <= 16; x += 2) _wavePoints.Add(new Point(x, 8));
+            _catTransformGroup.Children.Add(_catScale);
+            _catTransformGroup.Children.Add(_catTranslate);
+            VisCat.RenderTransformOrigin = new Point(0.5, 0.5);
+            VisCat.RenderTransform = _catTransformGroup;
+
             _visualizerTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
             _visualizerTimer.Tick += (_, _) =>
             {
-                VisBar1.Height = _rand.Next(2, 16);
-                VisBar2.Height = _rand.Next(2, 16);
-                VisBar3.Height = _rand.Next(2, 16);
+                int visType = WidgetManager.Instance.Config.MusicVisualizerType;
+                if (visType == 0)
+                {
+                    VisBar1.Height = _rand.Next(2, 16);
+                    VisBar2.Height = _rand.Next(2, 16);
+                    VisBar3.Height = _rand.Next(2, 16);
+                }
+                else if (visType == 1)
+                {
+                    _wavePhase -= 0.6;
+                    for (int i = 0; i < _wavePoints.Count; i++)
+                    {
+                        var pt = _wavePoints[i];
+                        pt.Y = 8 + Math.Sin(_wavePhase + pt.X * 0.4) * 4;
+                        _wavePoints[i] = pt; // update struct in collection
+                    }
+                    VisWave.Points = _wavePoints;
+                }
+                else if (visType == 2)
+                {
+                    _wavePhase += 1.0;
+                    _catTranslate.Y = Math.Sin(_wavePhase) * 2;
+                    _catTranslate.X = Math.Sin(_wavePhase * 0.5) * 6;
+                    _catScale.ScaleX = Math.Cos(_wavePhase * 0.5) > 0 ? 1 : -1;
+                }
             };
 
             // Store handler reference so we can unsubscribe on close (prevents memory leak)
@@ -185,11 +223,17 @@ namespace TaskbarMusicWidget
 
         private void OnMusicPlayingChanged(object? sender, EventArgs e) => Dispatcher.Invoke(UpdateVisualizerState);
 
-        private void UpdateVisualizerState()
+        public void UpdateVisualizerState()
         {
             if (_widgets.TryGetValue("Music", out var w) && w is MusicWidget music)
             {
                 VisualizerContainer.Visibility = Visibility.Visible;
+                int visType = WidgetManager.Instance.Config.MusicVisualizerType;
+                
+                VisBars.Visibility = visType == 0 ? Visibility.Visible : Visibility.Collapsed;
+                VisWave.Visibility = visType == 1 ? Visibility.Visible : Visibility.Collapsed;
+                VisCat.Visibility  = visType == 2 ? Visibility.Visible : Visibility.Collapsed;
+
                 if (music.IsPlaying)
                 {
                     _visualizerTimer.Start();
@@ -197,9 +241,28 @@ namespace TaskbarMusicWidget
                 else
                 {
                     _visualizerTimer.Stop();
-                    VisBar1.Height = 2;
-                    VisBar2.Height = 2;
-                    VisBar3.Height = 2;
+                    if (visType == 0)
+                    {
+                        VisBar1.Height = 2;
+                        VisBar2.Height = 2;
+                        VisBar3.Height = 2;
+                    }
+                    else if (visType == 1)
+                    {
+                        for (int i = 0; i < _wavePoints.Count; i++)
+                        {
+                            var pt = _wavePoints[i];
+                            pt.Y = 8;
+                            _wavePoints[i] = pt;
+                        }
+                        VisWave.Points = _wavePoints;
+                    }
+                    else if (visType == 2)
+                    {
+                        _catTranslate.X = 0;
+                        _catTranslate.Y = 0;
+                        _catScale.ScaleX = 1;
+                    }
                 }
             }
             else
@@ -236,6 +299,14 @@ namespace TaskbarMusicWidget
                 WidgetHost.Content = null;
             }
             UpdateArrows();
+        }
+
+        private const byte VK_MEDIA_PLAY_PAUSE = 0xB3;
+        private void VisualizerContainer_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 0, 0);
+            keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 2, 0);
+            e.Handled = true;
         }
 
         private void UpdateArrows()

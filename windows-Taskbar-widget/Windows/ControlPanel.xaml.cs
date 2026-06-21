@@ -61,6 +61,7 @@ namespace TaskbarMusicWidget.Windows
             ChkStartup.IsChecked = mgr.Config.StartWithWindows;
             ChkHideFullScreen.IsChecked = mgr.Config.HideOnFullScreen;
             SldPosition.Value = mgr.Config.PositionPercent;
+            CmbVisualizerStyle.SelectedIndex = mgr.Config.MusicVisualizerType;
             _loading = false;
         }
 
@@ -137,6 +138,16 @@ namespace TaskbarMusicWidget.Windows
             // Force an immediate refresh of the main window position
             var mainWindow = Application.Current.MainWindow as MainWindow;
             mainWindow?.ForceReposition();
+        }
+
+        private void VisualizerStyle_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_loading) return;
+            WidgetManager.Instance.Config.MusicVisualizerType = CmbVisualizerStyle.SelectedIndex;
+            WidgetManager.Instance.Config.Save();
+            
+            var mainWindow = Application.Current.MainWindow as MainWindow;
+            mainWindow?.UpdateVisualizerState();
         }
 
         private void Save_Click(object sender, RoutedEventArgs e)

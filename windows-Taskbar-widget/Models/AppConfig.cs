@@ -28,6 +28,7 @@ namespace TaskbarMusicWidget.Models
         public bool HideOnFullScreen { get; set; } = true;
         public double PositionPercent { get; set; } = 0.0; // Default to far left
         public int ActiveWidgetIndex { get; set; } = 0;
+        public int MusicVisualizerType { get; set; } = 0; // 0 = Bars, 1 = Wave, 2 = Walking Cat
         public List<WidgetConfig> Widgets { get; set; } = new();
         public PomodoroSettings Pomodoro { get; set; } = new();
 

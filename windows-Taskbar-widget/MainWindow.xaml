@@ -52,7 +52,7 @@
                 <ColumnDefinition Width="18"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="18"/>
-                <ColumnDefinition Width="14"/>
+                <ColumnDefinition Width="20"/>
             </Grid.ColumnDefinitions>
 
             <!-- Left navigation arrow -->
@@ -85,18 +85,32 @@
                     HorizontalAlignment="Center"
                     Visibility="Collapsed"
                     ToolTip="Playing Music"
-                    Margin="2,0,0,0">
-                <Grid Height="16" Width="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="2"/>
-                        <ColumnDefinition Width="1"/>
-                        <ColumnDefinition Width="2"/>
-                        <ColumnDefinition Width="1"/>
-                        <ColumnDefinition Width="2"/>
-                    </Grid.ColumnDefinitions>
-                    <Rectangle Name="VisBar1" Grid.Column="0" Fill="White" VerticalAlignment="Bottom" Height="2" RadiusX="1" RadiusY="1"/>
-                    <Rectangle Name="VisBar2" Grid.Column="2" Fill="White" VerticalAlignment="Bottom" Height="2" RadiusX="1" RadiusY="1"/>
-                    <Rectangle Name="VisBar3" Grid.Column="4" Fill="White" VerticalAlignment="Bottom" Height="2" RadiusX="1" RadiusY="1"/>
+                    Margin="2,0,0,0"
+                    Cursor="Hand"
+                    Background="Transparent"
+                    MouseLeftButtonDown="VisualizerContainer_MouseLeftButtonDown">
+                <Grid Height="16" Width="16">
+                    <!-- Bars Visualizer -->
+                    <Grid Name="VisBars" HorizontalAlignment="Center" Width="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2"/>
+                            <ColumnDefinition Width="1"/>
+                            <ColumnDefinition Width="2"/>
+                            <ColumnDefinition Width="1"/>
+                            <ColumnDefinition Width="2"/>
+                        </Grid.ColumnDefinitions>
+                        <Rectangle Name="VisBar1" Grid.Column="0" Fill="White" VerticalAlignment="Bottom" Height="2" RadiusX="1" RadiusY="1"/>
+                        <Rectangle Name="VisBar2" Grid.Column="2" Fill="White" VerticalAlignment="Bottom" Height="2" RadiusX="1" RadiusY="1"/>
+                        <Rectangle Name="VisBar3" Grid.Column="4" Fill="White" VerticalAlignment="Bottom" Height="2" RadiusX="1" RadiusY="1"/>
+                    </Grid>
+                    <!-- Wave Visualizer -->
+                    <Polyline Name="VisWave" Stroke="White" StrokeThickness="1.5" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                    <!-- Walking Cat Visualizer -->
+                    <TextBlock Name="VisCat" Text="🐈" Foreground="Orange" FontSize="13" FontFamily="Segoe UI Emoji" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <TextBlock.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="2" ShadowDepth="1" Opacity="0.8"/>
+                        </TextBlock.Effect>
+                    </TextBlock>
                 </Grid>
             </Border>
         </Grid>
