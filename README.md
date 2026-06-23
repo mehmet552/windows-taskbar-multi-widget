@@ -1,4 +1,3 @@
-[Kayıt 2026-06-23 130449.zip](https://github.com/user-attachments/files/29245826/Kayit.2026-06-23.130449.zip)# Windows Taskbar Multi-Widget
 
 A versatile, lightweight, and customizable Windows taskbar widget designed to enhance your productivity and media experience. This application seamlessly integrates multiple useful tools directly into your Windows taskbar, offering a unified control center for your daily tasks.
 
