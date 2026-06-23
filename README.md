@@ -6,7 +6,8 @@ A versatile, lightweight, and customizable Windows taskbar widget designed to en
 https://github.com/user-attachments/assets/9663ef22-51eb-43ae-b1a8-5effa9c47565
 
 ---
-video:version-2
+video belong old version
+
 
 ## Features
 
