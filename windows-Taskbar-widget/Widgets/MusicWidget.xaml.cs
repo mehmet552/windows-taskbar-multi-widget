@@ -45,7 +45,7 @@ namespace TaskbarMusicWidget.Widgets
 
         private DispatcherTimer? _timelineTimer;
         private DispatcherTimer? _timelineHideTimer;
-        private bool _isUpdatingVolume;
+        private bool _isUpdatingVolume = true;
         private bool _isDraggingTimeline;
 
         // Stored to allow proper unsubscription — prevents GC from holding this widget alive

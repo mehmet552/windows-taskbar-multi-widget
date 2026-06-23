@@ -22,6 +22,27 @@ namespace TaskbarMusicWidget
 
             // Check first run — wizard runs BEFORE main window opens
             var mgr = WidgetManager.Instance;
+
+            try
+            {
+                // Enforce Startup Setting and remove legacy shortcut
+                bool enable = mgr.Config.StartWithWindows;
+                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
+                if (enable)
+                    key?.SetValue("TaskbarWidgets", $"\"{Environment.ProcessPath}\"");
+                else
+                    key?.DeleteValue("TaskbarWidgets", false);
+
+                string startupFolder = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+                string shortcutPath = Path.Combine(startupFolder, "TaskbarMusicWidget.lnk");
+                if (File.Exists(shortcutPath))
+                {
+                    File.Delete(shortcutPath);
+                }
+            }
+            catch { }
+
             if (mgr.Config.IsFirstRun)
             {
                 var wizard = new SetupWizard();

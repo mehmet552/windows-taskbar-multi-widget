@@ -110,6 +110,7 @@ namespace TaskbarMusicWidget.Windows
             if (_loading) return;
             bool enable = ChkStartup.IsChecked == true;
             WidgetManager.Instance.Config.StartWithWindows = enable;
+            WidgetManager.Instance.Config.Save();
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(
@@ -118,6 +119,13 @@ namespace TaskbarMusicWidget.Windows
                     key?.SetValue("TaskbarWidgets", $"\"{Environment.ProcessPath}\"");
                 else
                     key?.DeleteValue("TaskbarWidgets", false);
+
+                string startupFolder = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+                string shortcutPath = System.IO.Path.Combine(startupFolder, "TaskbarMusicWidget.lnk");
+                if (System.IO.File.Exists(shortcutPath))
+                {
+                    System.IO.File.Delete(shortcutPath);
+                }
             }
             catch { }
         }
