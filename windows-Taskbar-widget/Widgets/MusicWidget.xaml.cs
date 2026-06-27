@@ -361,7 +361,7 @@ namespace TaskbarMusicWidget.Widgets
         {
             if (_drawer != null)
             {
-                try { _drawer.Close(); } catch { }
+                try { _drawer.SlideOut(); } catch { }
                 _drawer = null;
             }
         }

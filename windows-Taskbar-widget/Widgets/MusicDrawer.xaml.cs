@@ -71,9 +71,9 @@ namespace TaskbarMusicWidget.Widgets
             _timelineTimer.Tick += (_, _) => RefreshTimeline();
             _timelineTimer.Start();
 
-            // Auto-hide if mouse not over drawer for 4s
-            _autoHideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
-            _autoHideTimer.Tick += (_, _) => { _autoHideTimer.Stop(); Close(); };
+            // Auto-hide if mouse not over drawer for 2s
+            _autoHideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _autoHideTimer.Tick += (_, _) => { _autoHideTimer.Stop(); SlideOut(); };
             _autoHideTimer.Start();
         }
 
@@ -151,9 +151,13 @@ namespace TaskbarMusicWidget.Widgets
             _isUpdatingVolume = false;
         }
 
+        private int _drawerHeight = 145;
+        private bool _isClosing = false;
+
         // ── Slide-in animation ─────────────────────────────────────────────────
         public void SlideIn(int drawerHeight)
         {
+            _drawerHeight = drawerHeight;
             SlideTransform.Y = drawerHeight;
             Opacity          = 0;
 
@@ -166,6 +170,25 @@ namespace TaskbarMusicWidget.Widgets
 
             var fadeAnim = new DoubleAnimation(0, 1,
                 new Duration(TimeSpan.FromMilliseconds(220)));
+            BeginAnimation(OpacityProperty, fadeAnim);
+        }
+
+        // ── Slide-out animation ────────────────────────────────────────────────
+        public void SlideOut()
+        {
+            if (_isClosing) return;
+            _isClosing = true;
+
+            var slideAnim = new DoubleAnimation(0, _drawerHeight,
+                new Duration(TimeSpan.FromMilliseconds(240)))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+            };
+            SlideTransform.BeginAnimation(TranslateTransform.YProperty, slideAnim);
+
+            var fadeAnim = new DoubleAnimation(1, 0,
+                new Duration(TimeSpan.FromMilliseconds(220)));
+            fadeAnim.Completed += (_, _) => Close();
             BeginAnimation(OpacityProperty, fadeAnim);
         }
 

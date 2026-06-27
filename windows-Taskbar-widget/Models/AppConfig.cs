@@ -24,7 +24,7 @@ namespace TaskbarMusicWidget.Models
     public class AppConfig
     {
         public bool IsFirstRun { get; set; } = true;
-        public bool StartWithWindows { get; set; } = false;
+        public bool StartWithWindows { get; set; } = true;
         public bool HideOnFullScreen { get; set; } = true;
         public double PositionPercent { get; set; } = 0.0; // Default to far left
         public int ActiveWidgetIndex { get; set; } = 0;
@@ -69,6 +69,7 @@ namespace TaskbarMusicWidget.Models
         public static AppConfig CreateDefault() => new()
         {
             IsFirstRun = true,
+            StartWithWindows = true,
             Widgets = new List<WidgetConfig>
             {
                 new() { Id = "Music",     IsEnabled = true, Order = 0 },
