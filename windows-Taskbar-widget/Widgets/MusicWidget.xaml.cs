@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
@@ -17,47 +18,59 @@ namespace TaskbarMusicWidget.Widgets
 {
     public partial class MusicWidget : UserControl
     {
-        [DllImport("user32.dll")]
-        static extern void keybd_event(byte vk, byte scan, uint flags, uint extra);
+        // ── Win32 (for DPI + parent HWND) ──────────────────────────────────────
+        [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+        [DllImport("shcore.dll")] static extern int    GetDpiForMonitor(IntPtr hmon, int type, out uint dpiX, out uint dpiY);
 
-        private const byte VK_MEDIA_NEXT = 0xB0;
-        private const byte VK_MEDIA_PREV = 0xB1;
-        private const byte VK_MEDIA_PLAY = 0xB3;
-
+        // ── SMTC ───────────────────────────────────────────────────────────────
         private GlobalSystemMediaTransportControlsSessionManager? _mgr;
         private GlobalSystemMediaTransportControlsSession? _session;
+
         private bool _isPlaying;
         public bool IsPlaying
         {
             get => _isPlaying;
             private set
             {
-                if (_isPlaying != value)
-                {
-                    _isPlaying = value;
-                    IsPlayingChanged?.Invoke(this, EventArgs.Empty);
-                }
+                if (_isPlaying == value) return;
+                _isPlaying = value;
+                if (_isPlaying) _progressTimer?.Start();
+                else _progressTimer?.Stop();
+                IsPlayingChanged?.Invoke(this, EventArgs.Empty);
             }
         }
         public event EventHandler? IsPlayingChanged;
+
+        // ── Scroll animation ───────────────────────────────────────────────────
         private bool _scrolling;
         private Storyboard? _scrollSb;
 
-        private DispatcherTimer? _timelineTimer;
-        private DispatcherTimer? _timelineHideTimer;
-        private bool _isUpdatingVolume = true;
-        private bool _isDraggingTimeline;
+        // ── Album art + colours ────────────────────────────────────────────────
+        private BitmapImage? _currentBmp;
+        private Color _lastDominant = Color.FromRgb(0x11, 0x11, 0x11);
+        private Color _lastAccent   = Color.FromRgb(0x6E, 0xE7, 0xF5);
 
-        // Stored to allow proper unsubscription — prevents GC from holding this widget alive
+        // ── Progress timer (for the top widget bar) ────────────────────────────
+        private DispatcherTimer? _progressTimer;
+
+        // ── Drawer window ──────────────────────────────────────────────────────
+        private MusicDrawer? _drawer;
+        private const int DrawerHeight = 175; // logical pixels (increased to show volume bar)
+
+        // ── Volume ─────────────────────────────────────────────────────────────
+        private bool _isUpdatingVolume;
         private UserPreferenceChangedEventHandler? _themeHandler;
 
+        // ── Constructor ────────────────────────────────────────────────────────
         public MusicWidget()
         {
             InitializeComponent();
             Loaded   += OnLoaded;
             Unloaded += OnUnloaded;
 
-            // Keep reference to handler so we can unsubscribe — static event holds strong reference!
+            _progressTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(500) };
+            _progressTimer.Tick += OnProgressTick;
+
             _themeHandler = (_, e) =>
             {
                 if (e.Category == UserPreferenceCategory.General) ApplyTextTheme();
@@ -67,43 +80,26 @@ namespace TaskbarMusicWidget.Widgets
             BuildScrollStoryboard();
         }
 
+        // ── Lifecycle ──────────────────────────────────────────────────────────
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
             AudioManager.Initialize();
             AudioManager.VolumeChanged += OnVolumeChanged;
 
             _isUpdatingVolume = true;
-            SldVolume.Value = AudioManager.GetMasterVolume();
+            float vol = AudioManager.GetMasterVolume();
+            TxtVolPercent.Text = ((int)vol).ToString();
             _isUpdatingVolume = false;
-
-            // Timeline timer: only ticks when popup is actually open
-            // Start/stop is managed by AlbumArt_Click and TimelinePopup_Closed
-            _timelineTimer = new DispatcherTimer(DispatcherPriority.Background)
-            {
-                Interval = TimeSpan.FromMilliseconds(500)
-            };
-            _timelineTimer.Tick += (_, _) => UpdateTimelineUI();
-            // Note: NOT started here — started only when popup opens
-
-            _timelineHideTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-            _timelineHideTimer.Tick += (_, _) =>
-            {
-                TimelinePopup.IsOpen = false;
-                _timelineTimer?.Stop();       // ← Stop ticking when popup is hidden
-                _timelineHideTimer!.Stop();
-            };
 
             _ = InitSmtcAsync();
         }
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
-            _timelineTimer?.Stop();
-            _timelineHideTimer?.Stop();
             _scrollSb?.Stop(this);
             AudioManager.VolumeChanged -= OnVolumeChanged;
+            CloseDrawer();
 
-            // Unsubscribe static event — without this the GC cannot collect this UserControl
             if (_themeHandler != null)
             {
                 SystemEvents.UserPreferenceChanged -= _themeHandler;
@@ -115,16 +111,16 @@ namespace TaskbarMusicWidget.Widgets
         {
             Dispatcher.InvokeAsync(() =>
             {
-                if (Math.Abs(vol - SldVolume.Value) > 1.0)
-                {
-                    _isUpdatingVolume = true;
-                    SldVolume.Value = vol;
-                    _isUpdatingVolume = false;
-                }
+                TxtVolPercent.Text = ((int)vol).ToString();
+                _drawer?.SetVolume(vol);
+
+                double ratio = vol / 100.0;
+                if (Window.GetWindow(this) is MainWindow mw)
+                    mw.SetVolumeScale(Math.Max(0, Math.Min(1, ratio)));
             });
         }
 
-        // ── SMTC ──────────────────────────────────────────────────────────────
+        // ── SMTC ───────────────────────────────────────────────────────────────
         private async Task InitSmtcAsync()
         {
             try
@@ -169,15 +165,10 @@ namespace TaskbarMusicWidget.Widgets
                 var props = await _session.TryGetMediaPropertiesAsync();
                 if (props == null) { Dispatcher.Invoke(ShowIdle); return; }
 
-                var title  = string.IsNullOrWhiteSpace(props.Title)  ? "Unknown" : props.Title;
-                var artist = string.IsNullOrWhiteSpace(props.Artist) ? ""           : props.Artist;
+                string title  = string.IsNullOrWhiteSpace(props.Title)  ? "Unknown" : props.Title;
+                string artist = string.IsNullOrWhiteSpace(props.Artist) ? ""        : props.Artist;
 
-                Dispatcher.Invoke(() =>
-                {
-                    TxtTitle.Text  = title;
-                    TxtArtist.Text = artist;
-                });
-
+                BitmapImage? bmp = null;
                 if (props.Thumbnail != null)
                 {
                     try
@@ -186,33 +177,48 @@ namespace TaskbarMusicWidget.Widgets
                         using var ms = new MemoryStream();
                         await stream.AsStreamForRead().CopyToAsync(ms);
                         ms.Position = 0;
-                        var bmp = new BitmapImage();
-                        Dispatcher.Invoke(() =>
-                        {
-                            bmp.BeginInit();
-                            bmp.StreamSource  = ms;
-                            bmp.CacheOption   = BitmapCacheOption.OnLoad;
-                            bmp.EndInit();
-                            bmp.Freeze();
-                            AlbumArt.Source            = bmp;
-                            NoArtIcon.Visibility       = Visibility.Collapsed;
-                        });
+                        bmp = new BitmapImage();
+                        bmp.BeginInit();
+                        bmp.StreamSource = ms;
+                        bmp.CacheOption  = BitmapCacheOption.OnLoad;
+                        bmp.EndInit();
+                        bmp.Freeze();
                     }
-                    catch
-                    {
-                        Dispatcher.Invoke(() => { AlbumArt.Source = null; NoArtIcon.Visibility = Visibility.Visible; });
-                    }
+                    catch { bmp = null; }
                 }
-                else
-                {
-                    Dispatcher.Invoke(() => { AlbumArt.Source = null; NoArtIcon.Visibility = Visibility.Visible; });
-                }
+
+                // Extract colours on background thread
+                Color dominant = Color.FromRgb(0x11, 0x11, 0x11);
+                Color accent   = Color.FromRgb(0x6E, 0xE7, 0xF5);
+                if (bmp != null) ExtractColors(bmp, out dominant, out accent);
 
                 Dispatcher.Invoke(() =>
                 {
+                    _currentBmp    = bmp;
+                    _lastDominant  = dominant;
+                    _lastAccent    = accent;
+
+                    if (Window.GetWindow(this) is MainWindow mw)
+                        mw.SetTimelineColor(accent);
+
+                    TxtTitle.Text  = title;
+                    TxtArtist.Text = artist;
+
+                    AlbumArt.Source         = bmp;
+                    NoArtIcon.Visibility    = bmp != null ? Visibility.Collapsed : Visibility.Visible;
+
+                    // Sync open drawer
+                    if (_drawer != null && _drawer.IsVisible)
+                    {
+                        _drawer.SetAlbumArt(bmp);
+                        _drawer.SetTrackInfo(title, artist);
+                        _drawer.SetAccentColor(accent);
+                        _drawer.SetTintColor(dominant);
+                    }
+
+                    // Scrolling title
                     TxtTitle.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                    double w = TxtTitle.DesiredSize.Width;
-                    bool needScroll = w > 105;
+                    bool needScroll = TxtTitle.DesiredSize.Width > 105;
                     if (needScroll && !_scrolling)      { _scrolling = true;  _scrollSb?.Begin(this, true); }
                     else if (!needScroll && _scrolling) { _scrolling = false; _scrollSb?.Stop(this); TxtTitleTransform.X = 0; }
                 });
@@ -229,6 +235,33 @@ namespace TaskbarMusicWidget.Widgets
                 IsPlaying = info?.PlaybackStatus ==
                     GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
                 BtnPlay.Content = IsPlaying ? "\u23F8" : "\u25B6";
+                _drawer?.SetPlayState(IsPlaying);
+                UpdateTimelineNow();
+            }
+            catch { }
+        }
+
+        private void OnProgressTick(object? sender, EventArgs e) => UpdateTimelineNow();
+
+        private void UpdateTimelineNow()
+        {
+            if (_session == null) return;
+            try
+            {
+                var props = _session.GetTimelineProperties();
+                if (props != null && props.EndTime > TimeSpan.Zero)
+                {
+                    var pos = props.Position;
+                    if (IsPlaying && props.LastUpdatedTime != default)
+                    {
+                        pos += (DateTimeOffset.Now - props.LastUpdatedTime);
+                        if (pos > props.EndTime) pos = props.EndTime;
+                    }
+
+                    double ratio = pos.TotalSeconds / props.EndTime.TotalSeconds;
+                    if (Window.GetWindow(this) is MainWindow mw)
+                        mw.SetTimelineScale(Math.Max(0, Math.Min(1, ratio)));
+                }
             }
             catch { }
         }
@@ -238,6 +271,7 @@ namespace TaskbarMusicWidget.Widgets
             if (!Dispatcher.CheckAccess()) { Dispatcher.Invoke(ShowIdle); return; }
             try
             {
+                _currentBmp             = null;
                 TxtTitle.Text           = "Not playing";
                 TxtArtist.Text          = "";
                 AlbumArt.Source         = null;
@@ -247,14 +281,17 @@ namespace TaskbarMusicWidget.Widgets
                 _scrollSb?.Stop(this);
                 _scrolling              = false;
                 TxtTitleTransform.X     = 0;
+                _drawer?.SetAlbumArt(null);
+                _drawer?.SetTrackInfo("Not playing", "");
             }
             catch { }
         }
 
+        // ── Scroll storyboard ─────────────────────────────────────────────────
         private void BuildScrollStoryboard()
         {
             _scrollSb = new Storyboard { RepeatBehavior = RepeatBehavior.Forever };
-            var anim = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever };
+            var anim  = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever };
             anim.KeyFrames.Add(new LinearDoubleKeyFrame(0,    KeyTime.FromTimeSpan(TimeSpan.FromSeconds(0))));
             anim.KeyFrames.Add(new LinearDoubleKeyFrame(0,    KeyTime.FromTimeSpan(TimeSpan.FromSeconds(2))));
             anim.KeyFrames.Add(new LinearDoubleKeyFrame(-140, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(6))));
@@ -265,143 +302,183 @@ namespace TaskbarMusicWidget.Widgets
             _scrollSb.Children.Add(anim);
         }
 
-        private void UpdateTimelineUI()
+        // ── Drawer management ─────────────────────────────────────────────────
+        private void ToggleDrawer()
         {
-            if (!TimelinePopup.IsOpen || _isDraggingTimeline || _session == null) return;
+            if (_drawer != null && _drawer.IsVisible)
+            {
+                CloseDrawer();
+            }
+            else
+            {
+                OpenDrawer();
+            }
+        }
+
+        private void OpenDrawer()
+        {
+            CloseDrawer(); // ensure clean state
+
+            var parentWin = Window.GetWindow(this);
+            if (parentWin == null) return;
+
+            // Get parent HWND and DPI for Win32 positioning
+            var helper     = new WindowInteropHelper(parentWin);
+            IntPtr hwnd    = helper.Handle;
+            double dpi     = GetDpi(hwnd);
+
+            _drawer = new MusicDrawer();
+
+            // Wire up events so drawer can call SMTC methods back
+            _drawer.PlayPauseRequested   += async () => await PlayPauseAsync();
+            _drawer.PrevRequested        += async () => await PrevAsync();
+            _drawer.NextRequested        += async () => await NextAsync();
+            _drawer.SeekRequested        += async ticks => await SeekAsync(ticks);
+            _drawer.VolumeChangeRequested += vol =>
+            {
+                AudioManager.SetMasterVolume(vol);
+                TxtVolPercent.Text = ((int)vol).ToString();
+            };
+            _drawer.Closed += (_, _) => _drawer = null;
+
+            // Show before positioning (so Handle is available)
+            _drawer.Show();
+            _drawer.PositionAbove(hwnd, dpi, DrawerHeight);
+
+            // Populate drawer
+            _drawer.SetAlbumArt(_currentBmp);
+            _drawer.SetTrackInfo(TxtTitle.Text, TxtArtist.Text);
+            _drawer.SetPlayState(IsPlaying);
+            _drawer.SetSession(_session);
+            _drawer.SetAccentColor(_lastAccent);
+            _drawer.SetTintColor(_lastDominant);
+            _drawer.SetVolume(AudioManager.GetMasterVolume());
+
+            _drawer.SlideIn(DrawerHeight);
+        }
+
+        private void CloseDrawer()
+        {
+            if (_drawer != null)
+            {
+                try { _drawer.Close(); } catch { }
+                _drawer = null;
+            }
+        }
+
+        private static double GetDpi(IntPtr hwnd)
+        {
             try
             {
-                var props = _session.GetTimelineProperties();
-                if (props != null && props.EndTime > TimeSpan.Zero)
-                {
-                    TxtDuration.Text  = props.EndTime.ToString(@"m\:ss");
-                    TxtPosition.Text  = props.Position.ToString(@"m\:ss");
-                    SldTimeline.Value = (props.Position.TotalSeconds / props.EndTime.TotalSeconds) * 100.0;
-                }
+                IntPtr hmon = MonitorFromWindow(hwnd, 2);
+                GetDpiForMonitor(hmon, 0, out uint dpiX, out _);
+                return dpiX / 96.0;
+            }
+            catch { return 1.25; }
+        }
+
+        // ── Widget button handlers ─────────────────────────────────────────────
+        private void AlbumArt_Click(object sender, MouseButtonEventArgs e) => ToggleDrawer();
+        private void Volume_Click(object sender, MouseButtonEventArgs e)   => ToggleDrawer();
+
+        private async void BtnPrev_Click(object sender, RoutedEventArgs e) => await PrevAsync();
+        private async void BtnPlay_Click(object sender, RoutedEventArgs e) => await PlayPauseAsync();
+        private async void BtnNext_Click(object sender, RoutedEventArgs e) => await NextAsync();
+
+        // ── SMTC command helpers ───────────────────────────────────────────────
+        private async Task PlayPauseAsync()
+        {
+            if (_session == null) return;
+            try
+            {
+                if (IsPlaying) await _session.TryPauseAsync();
+                else           await _session.TryPlayAsync();
             }
             catch { }
         }
 
-        // ── Button handlers ────────────────────────────────────────────────────
-        private void BtnPrev_Click(object sender, RoutedEventArgs e)
+        private async Task PrevAsync()
         {
-            keybd_event(VK_MEDIA_PREV, 0, 0, 0);
-            keybd_event(VK_MEDIA_PREV, 0, 2, 0);
-        }
-        private void BtnPlay_Click(object sender, RoutedEventArgs e)
-        {
-            keybd_event(VK_MEDIA_PLAY, 0, 0, 0);
-            keybd_event(VK_MEDIA_PLAY, 0, 2, 0);
-        }
-        private void BtnNext_Click(object sender, RoutedEventArgs e)
-        {
-            keybd_event(VK_MEDIA_NEXT, 0, 0, 0);
-            keybd_event(VK_MEDIA_NEXT, 0, 2, 0);
+            if (_session != null) try { await _session.TrySkipPreviousAsync(); } catch { }
         }
 
-        private void AlbumArt_Click(object sender, MouseButtonEventArgs e)
+        private async Task NextAsync()
         {
-            if (_session != null)
-            {
-                TimelinePopup.IsOpen = true;
-                _timelineTimer?.Start();   // ← Start timer only when popup opens
-                UpdateTimelineUI();
-                _timelineHideTimer?.Start();
-            }
+            if (_session != null) try { await _session.TrySkipNextAsync(); } catch { }
         }
 
-        private void AlbumArtContainer_MouseEnter(object sender, MouseEventArgs e) =>
-            _timelineHideTimer?.Stop();
-
-        private void AlbumArtContainer_MouseLeave(object sender, MouseEventArgs e)
+        private async Task SeekAsync(long ticks)
         {
-            if (TimelinePopup.IsOpen) _timelineHideTimer?.Start();
+            if (_session != null) try { await _session.TryChangePlaybackPositionAsync(ticks); } catch { }
         }
 
-        private void TimelinePopup_MouseEnter(object sender, MouseEventArgs e) =>
-            _timelineHideTimer?.Stop();
-
-        private void TimelinePopup_MouseLeave(object sender, MouseEventArgs e)
-        {
-            if (TimelinePopup.IsOpen) _timelineHideTimer?.Start();
-        }
-
-        private void SldTimeline_MouseDown(object sender, MouseButtonEventArgs e) =>
-            _isDraggingTimeline = true;
-
-        private async void SldTimeline_MouseUp(object sender, MouseButtonEventArgs e)
-        {
-            if (_session != null)
-            {
-                var props = _session.GetTimelineProperties();
-                if (props != null && props.EndTime > TimeSpan.Zero)
-                {
-                    double percent    = SldTimeline.Value / 100.0;
-                    long targetTicks  = (long)(props.EndTime.Ticks * percent);
-                    await _session.TryChangePlaybackPositionAsync(targetTicks);
-                }
-            }
-            _isDraggingTimeline = false;
-        }
-
-        private void SldTimeline_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            if (_isDraggingTimeline && _session != null)
-            {
-                var props = _session.GetTimelineProperties();
-                if (props != null && props.EndTime > TimeSpan.Zero)
-                {
-                    TimeSpan pos    = TimeSpan.FromTicks((long)(props.EndTime.Ticks * (e.NewValue / 100.0)));
-                    TxtPosition.Text = pos.ToString(@"m\:ss");
-                }
-            }
-        }
-
-        private void SldVolume_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            if (TxtVolumeVal != null) TxtVolumeVal.Text = ((int)e.NewValue).ToString();
-            if (!_isUpdatingVolume) AudioManager.SetMasterVolume((float)e.NewValue);
-        }
-
+        // ── Volume scroll ─────────────────────────────────────────────────────
         private void Volume_MouseWheel(object sender, MouseWheelEventArgs e)
         {
-            float vol  = AudioManager.GetMasterVolume();
+            float vol = AudioManager.GetMasterVolume();
             vol = e.Delta > 0 ? Math.Min(100f, vol + 2f) : Math.Max(0f, vol - 2f);
             AudioManager.SetMasterVolume(vol);
-            _isUpdatingVolume = true;
-            SldVolume.Value   = vol;
-            _isUpdatingVolume = false;
+            TxtVolPercent.Text = ((int)vol).ToString();
+            _drawer?.SetVolume(vol);
         }
 
-        private void Volume_MouseEnter(object sender, MouseEventArgs e) =>
-            VolPopup.IsOpen = true;
-
-        private void Volume_MouseLeave(object sender, MouseEventArgs e) =>
-            Dispatcher.InvokeAsync(async () =>
-            {
-                await Task.Delay(150);
-                if (!VolPopup.IsMouseOver && !VolContainer.IsMouseOver) VolPopup.IsOpen = false;
-            });
-
-        private void VolPopup_MouseLeave(object sender, MouseEventArgs e) =>
-            Dispatcher.InvokeAsync(async () =>
-            {
-                await Task.Delay(150);
-                if (!VolPopup.IsMouseOver && !VolContainer.IsMouseOver) VolPopup.IsOpen = false;
-            });
-
+        // ── Theme ─────────────────────────────────────────────────────────────
         private void ApplyTextTheme()
         {
             try
             {
-                using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+                using var key = Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
                 bool isDark = true;
                 if (key?.GetValue("AppsUseLightTheme") is int v) isDark = v == 0;
+                if (TxtTitle  != null) TxtTitle.Foreground = isDark ? Brushes.White : Brushes.Black;
+                if (TxtArtist != null) TxtArtist.Foreground = new SolidColorBrush(
+                    isDark ? Color.FromRgb(0x88, 0x88, 0x88) : Color.FromRgb(0x44, 0x44, 0x44));
+            }
+            catch { }
+        }
 
-                if (TxtTitle != null)
-                    TxtTitle.Foreground = isDark ? Brushes.White : Brushes.Black;
-                if (TxtArtist != null)
-                    TxtArtist.Foreground = new SolidColorBrush(
-                        isDark ? Color.FromRgb(0x88, 0x88, 0x88) : Color.FromRgb(0x44, 0x44, 0x44));
+        // ── Colour extraction from album art ──────────────────────────────────
+        private static void ExtractColors(BitmapImage bmp, out Color dominant, out Color accent)
+        {
+            dominant = Color.FromRgb(0x11, 0x11, 0x11);
+            accent   = Color.FromRgb(0x6E, 0xE7, 0xF5);
+            try
+            {
+                const int size = 20;
+                var scaled = new TransformedBitmap(bmp,
+                    new ScaleTransform(size / (double)bmp.PixelWidth,
+                                       size / (double)bmp.PixelHeight));
+                int stride = scaled.PixelWidth * 4;
+                var px     = new byte[scaled.PixelHeight * stride];
+                scaled.CopyPixels(px, stride, 0);
+
+                long sumR = 0, sumG = 0, sumB = 0, count = 0;
+                double bestScore = -1, bestR = 0x6E, bestG = 0xE7, bestB = 0xF5;
+
+                for (int i = 0; i < px.Length; i += 4)
+                {
+                    if (px[i + 3] < 120) continue;
+                    double b = px[i] / 255.0, g = px[i+1] / 255.0, r = px[i+2] / 255.0;
+                    sumR += px[i+2]; sumG += px[i+1]; sumB += px[i]; count++;
+
+                    double max = Math.Max(r, Math.Max(g, b));
+                    double min = Math.Min(r, Math.Min(g, b));
+                    double L   = (max + min) / 2.0;
+                    double S   = (max - min < 1e-9) ? 0 : (max - min) / (1.0 - Math.Abs(2*L - 1));
+                    double ls  = Math.Max(0, 1.0 - Math.Abs(L - 0.55) * 2.5);
+                    double sc  = S * ls;
+                    if (sc > bestScore) { bestScore = sc; bestR = r*255; bestG = g*255; bestB = b*255; }
+                }
+
+                if (count == 0) return;
+                dominant = Color.FromRgb((byte)(sumR/count * 0.18),
+                                         (byte)(sumG/count * 0.18),
+                                         (byte)(sumB/count * 0.18));
+                if (bestScore > 0.15)
+                    accent = Color.FromRgb((byte)Math.Min(255, bestR * 1.25),
+                                           (byte)Math.Min(255, bestG * 1.25),
+                                           (byte)Math.Min(255, bestB * 1.25));
             }
             catch { }
         }

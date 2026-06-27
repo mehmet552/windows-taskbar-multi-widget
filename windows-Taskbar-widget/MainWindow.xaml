@@ -113,6 +113,27 @@
                     </TextBlock>
                 </Grid>
             </Border>
+
+            <!-- Top Progress Bar (Track) -->
+            <Border Grid.ColumnSpan="4" VerticalAlignment="Top" Height="1.5" Background="#1AFFFFFF" IsHitTestVisible="False"/>
+            <!-- Top Progress Bar (Fill) -->
+            <Border x:Name="TimelineBarFill" Grid.ColumnSpan="4" VerticalAlignment="Top" Height="1.5" Background="#CC6EE7F5" 
+                    IsHitTestVisible="False" HorizontalAlignment="Left" Width="{Binding ActualWidth, ElementName=MainBorder}">
+                <Border.RenderTransform>
+                    <ScaleTransform x:Name="TimelineScale" ScaleX="0"/>
+                </Border.RenderTransform>
+            </Border>
+
+            <!-- Bottom Volume Bar (Track) -->
+            <Border Grid.ColumnSpan="4" VerticalAlignment="Bottom" Height="1.5" Background="#1AFFFFFF" IsHitTestVisible="False"/>
+            <!-- Bottom Volume Bar (Fill) -->
+            <Border x:Name="VolumeBarFill" Grid.ColumnSpan="4" VerticalAlignment="Bottom" Height="1.5" Background="#AAAAAA" 
+                    IsHitTestVisible="False" HorizontalAlignment="Left" Width="{Binding ActualWidth, ElementName=MainBorder}">
+                <Border.RenderTransform>
+                    <ScaleTransform x:Name="VolumeScale" ScaleX="0"/>
+                </Border.RenderTransform>
+            </Border>
+
         </Grid>
     </Border>
 </Window>

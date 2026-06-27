@@ -55,3 +55,4 @@ project.lock.json
 *.pyc
 *.lnk
 !Taskbar Widget.lnk
+Run-Dev.bat

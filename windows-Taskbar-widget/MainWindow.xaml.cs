@@ -421,5 +421,23 @@ namespace TaskbarMusicWidget
             }
             catch { }
         }
+        // ── Widget Bar Management ──────────────────────────────────────────────
+        public void SetTimelineScale(double ratio)
+        {
+            Dispatcher.InvokeAsync(() => { TimelineScale.ScaleX = ratio; });
+        }
+
+        public void SetVolumeScale(double ratio)
+        {
+            Dispatcher.InvokeAsync(() => { VolumeScale.ScaleX = ratio; });
+        }
+
+        public void SetTimelineColor(Color accent)
+        {
+            Dispatcher.InvokeAsync(() => 
+            {
+                TimelineBarFill.Background = new SolidColorBrush(Color.FromArgb(0xDD, accent.R, accent.G, accent.B));
+            });
+        }
     }
 }
