@@ -4,6 +4,14 @@ A versatile, lightweight, and highly customizable Windows taskbar widget designe
 ### Preview
 
 
+
+https://github.com/user-attachments/assets/0be8fe18-89e8-47ac-8b5f-cfec232e0c82
+
+
+
+
+
+ video belong; version-2
 ---
 
 
